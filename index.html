@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Bluetooth BLE テスト</title>
+</head>
+<body>
+    <h1>BLE 通信テスト</h1>
+    <button id="connectBtn">マイコンに接続</button>
+    <div id="status" style="margin-top: 20px; font-weight: bold;">状態: 切断中</div>
+    <div id="output" style="margin-top: 10px; font-size: 24px; color: blue;">データ: --</div>
+
+    <script>
+        const connectBtn = document.getElementById('connectBtn');
+        const statusDiv = document.getElementById('status');
+        const outputDiv = document.getElementById('output');
+
+        connectBtn.addEventListener('click', async () => {
+            try {
+                statusDiv.innerText = "デバイスを探しています...";
+                
+                // 1. デバイスの検索と選択（心拍数サービスを持つデバイスに絞り込み）
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: ['heart_rate'] }]
+                });
+
+                statusDiv.innerText = `${device.name} に接続中...`;
+
+                // 2. GATTサーバーへ接続
+                const server = await device.gatt.connect();
+
+                // 3. サービスの取得
+                const service = await server.getPrimaryService('heart_rate');
+
+                // 4. キャラクタリスティックの取得
+                const characteristic = await service.getCharacteristic('heart_rate_measurement');
+
+                // 5. 通知（Notify）の受け取りを開始
+                await characteristic.startNotifications();
+                statusDiv.innerText = `接続完了: ${device.name}`;
+
+                // 6. データを受信したときの処理
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                    const value = event.target.value;
+                    // BLE心拍数フォーマット: 1バイト目がフラグ、2バイト目が心拍数の数値
+                    const heartRateValue = value.getUint8(1); 
+                    outputDiv.innerText = `データ: ${heartRateValue} bpm`;
+                });
+
+                // 切断時の処理
+                device.addEventListener('gattserverdisconnected', () => {
+                    statusDiv.innerText = "状態: 切断されました";
+                    outputDiv.innerText = "データ: --";
+                });
+
+            } catch (error) {
+                console.error(error);
+                statusDiv.innerText = `エラー: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
